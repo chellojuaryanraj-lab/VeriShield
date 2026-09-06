@@ -39,4 +39,4 @@ export default defineconfig(
 {
   base: '/VerSheild/',
   plugins: [react()],
-  )}
+  })
