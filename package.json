@@ -33,10 +33,4 @@
     "@types/express": "^4.17.21"
   }
 }
-import {defineConfig} from 'vite'
-import react from '@vitejs/plugin-react
-export default defineconfig(
-{
-  base: '/VerSheild/',
-  plugins: [react()],
-  })
+
