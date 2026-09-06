@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   DOCUMENT_PRESETS 
 } from '../data/mockData';
-import { DocumentPreset, VerificationCheck } from '../types';
+import { DocumentPreset } from '../types';
 import { 
   Upload, 
   Scan, 
@@ -10,20 +10,14 @@ import {
   AlertTriangle, 
   XCircle, 
   RefreshCw, 
-  FileText, 
   Download, 
   Send, 
   Sliders, 
   Layers, 
   Eye, 
-  ShieldAlert, 
-  ShieldCheck, 
   Cpu, 
-  Zap, 
-  Info,
   Clock,
-  Sparkles,
-  Search
+  Code
 } from 'lucide-react';
 
 export const LiveSimulator: React.FC = () => {
@@ -37,6 +31,15 @@ export const LiveSimulator: React.FC = () => {
   const [copiedNotification, setCopiedNotification] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (scanIntervalRef.current) {
+        clearInterval(scanIntervalRef.current);
+      }
+    };
+  }, []);
 
   // Handle Preset Selection
   const handleSelectPreset = (presetId: string) => {
@@ -50,14 +53,17 @@ export const LiveSimulator: React.FC = () => {
 
   // Run the animated scanning cycle
   const runScanCycle = (preset: DocumentPreset) => {
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+    }
     setIsScanning(true);
     setScanProgress(10);
     setActivePreset(preset);
 
-    const interval = setInterval(() => {
+    scanIntervalRef.current = setInterval(() => {
       setScanProgress((prev) => {
         if (prev >= 100) {
-          clearInterval(interval);
+          if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
           setIsScanning(false);
           return 100;
         }
@@ -494,9 +500,26 @@ export const LiveSimulator: React.FC = () => {
                     AI_ANALYSIS_RESULTS: MULTI-MODEL ENGINE
                   </span>
                 </div>
-                <div className="flex items-center gap-1.5 font-mono text-[11px] text-slate-400">
-                  <Clock className="w-3 h-3 text-cyan-400" />
-                  <span>Avg Latency: 480ms</span>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-lg p-0.5 text-[11px] font-mono">
+                    <button
+                      onClick={() => setActiveTab('forensics')}
+                      className={`px-2 py-0.5 rounded transition-colors ${activeTab === 'forensics' ? 'bg-cyan-500/20 text-cyan-300 font-bold' : 'text-slate-400 hover:text-slate-200'}`}
+                    >
+                      Forensics
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('raw_json')}
+                      className={`px-2 py-0.5 rounded transition-colors flex items-center gap-1 ${activeTab === 'raw_json' ? 'bg-cyan-500/20 text-cyan-300 font-bold' : 'text-slate-400 hover:text-slate-200'}`}
+                    >
+                      <Code className="w-3 h-3" />
+                      JSON
+                    </button>
+                  </div>
+                  <div className="hidden sm:flex items-center gap-1 font-mono text-[11px] text-slate-400">
+                    <Clock className="w-3 h-3 text-cyan-400" />
+                    <span>480ms</span>
+                  </div>
                 </div>
               </div>
 
@@ -551,116 +574,168 @@ export const LiveSimulator: React.FC = () => {
                   </div>
                 </div>
 
-                {/* 2. Dynamic Progress Bars Checking (Specific Requirements from Prompt) */}
-                <div className="space-y-3.5">
-                  <div className="flex items-center justify-between text-xs font-mono text-slate-400 border-b border-slate-800 pb-1">
-                    <span>FORENSIC SUBSYSTEM INSPECTIONS</span>
-                    <span>ENGINE CONFIDENCE</span>
+                {activeTab === 'raw_json' ? (
+                  /* Raw JSON API Response View */
+                  <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 font-mono text-xs space-y-3">
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-800 text-slate-400 text-[11px]">
+                      <span className="text-cyan-400 flex items-center gap-1.5">
+                        <Code className="w-3.5 h-3.5" />
+                        REST API RESPONSE (POST /v1/screen)
+                      </span>
+                      <button
+                        onClick={() => copyNotification('JSON payload copied to clipboard.')}
+                        className="text-cyan-400 hover:text-cyan-300 underline"
+                      >
+                        Copy JSON
+                      </button>
+                    </div>
+                    <pre className="text-[11px] text-slate-300 leading-relaxed overflow-x-auto max-h-[420px] p-2 bg-slate-900/60 rounded-lg border border-slate-800/80">
+                      {JSON.stringify(
+                        {
+                          status: "success",
+                          requestId: `req_${activePreset.id}_${Date.now().toString(36)}`,
+                          timestamp: new Date().toISOString(),
+                          verdict: activePreset.verdict,
+                          riskScore: activePreset.riskScore,
+                          confidence: 99.8,
+                          document: {
+                            type: activePreset.docType,
+                            country: activePreset.countryCode,
+                            title: activePreset.title
+                          },
+                          anomaliesDetected: activePreset.tamperHighlights.map(t => ({
+                            anomaly: t.label,
+                            severity: t.severity,
+                            detail: t.description
+                          })),
+                          subsystemChecks: activePreset.checks.map(c => ({
+                            name: c.name,
+                            category: c.category,
+                            status: c.status,
+                            confidence: c.confidence,
+                            latencyMs: c.latencyMs
+                          })),
+                          forensicMetadata: activePreset.forensics
+                        },
+                        null,
+                        2
+                      )}
+                    </pre>
                   </div>
-
-                  {activePreset.checks.map((check) => (
-                    <div 
-                      key={check.id} 
-                      className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800/80 hover:border-slate-700 transition-colors space-y-2"
-                    >
-                      <div className="flex items-center justify-between text-xs font-mono">
-                        <div className="flex items-center gap-2">
-                          {check.status === 'PASS' ? (
-                            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                          ) : check.status === 'ALERT' ? (
-                            <XCircle className="w-4 h-4 text-rose-400 shrink-0 animate-pulse" />
-                          ) : (
-                            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-                          )}
-                          <span className="font-semibold text-slate-200">{check.name}</span>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wider ${
-                            check.status === 'PASS' 
-                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' 
-                              : check.status === 'ALERT'
-                              ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse'
-                              : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                          }`}>
-                            [{check.status}]
-                          </span>
-                          <span className="text-slate-400 text-[11px] font-mono">{check.confidence}%</span>
-                        </div>
+                ) : (
+                  <>
+                    {/* 2. Dynamic Progress Bars Checking (Specific Requirements from Prompt) */}
+                    <div className="space-y-3.5">
+                      <div className="flex items-center justify-between text-xs font-mono text-slate-400 border-b border-slate-800 pb-1">
+                        <span>FORENSIC SUBSYSTEM INSPECTIONS</span>
+                        <span>ENGINE CONFIDENCE</span>
                       </div>
 
-                      {/* Progress meter bar */}
-                      <div className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
+                      {activePreset.checks.map((check) => (
                         <div 
-                          className={`h-full rounded-full transition-all duration-700 ${
-                            check.status === 'PASS' 
-                              ? 'bg-emerald-400' 
-                              : check.status === 'ALERT'
-                              ? 'bg-rose-500'
-                              : 'bg-amber-400'
-                          }`}
-                          style={{ width: isScanning ? `${scanProgress * 0.7}%` : `${check.confidence}%` }}
-                        />
+                          key={check.id} 
+                          className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800/80 hover:border-slate-700 transition-colors space-y-2"
+                        >
+                          <div className="flex items-center justify-between text-xs font-mono">
+                            <div className="flex items-center gap-2">
+                              {check.status === 'PASS' ? (
+                                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                              ) : check.status === 'ALERT' ? (
+                                <XCircle className="w-4 h-4 text-rose-400 shrink-0 animate-pulse" />
+                              ) : (
+                                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                              )}
+                              <span className="font-semibold text-slate-200">{check.name}</span>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wider ${
+                                check.status === 'PASS' 
+                                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' 
+                                  : check.status === 'ALERT'
+                                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse'
+                                  : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                              }`}>
+                                [{check.status}]
+                              </span>
+                              <span className="text-slate-400 text-[11px] font-mono">{check.confidence}%</span>
+                            </div>
+                          </div>
+
+                          {/* Progress meter bar */}
+                          <div className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
+                            <div 
+                              className={`h-full rounded-full transition-all duration-700 ${
+                                check.status === 'PASS' 
+                                  ? 'bg-emerald-400' 
+                                  : check.status === 'ALERT'
+                                  ? 'bg-rose-500'
+                                  : 'bg-amber-400'
+                              }`}
+                              style={{ width: isScanning ? `${scanProgress * 0.7}%` : `${check.confidence}%` }}
+                            />
+                          </div>
+
+                          <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 pt-0.5">
+                            <span className={`${check.status === 'ALERT' ? 'text-rose-300 font-medium' : ''}`}>
+                              {check.detail}
+                            </span>
+                            <span className="text-slate-400 text-[10px] shrink-0 ml-2">
+                              {check.latencyMs}ms
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* 3. Deep Forensic Metadata Grid */}
+                    <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 font-mono text-xs space-y-2.5">
+                      <div className="flex items-center justify-between pb-1 border-b border-slate-800">
+                        <span className="text-slate-400 flex items-center gap-1.5">
+                          <Layers className="w-3.5 h-3.5 text-cyan-400" />
+                          SUB-PIXEL & TELEMETRY ATTESTATION
+                        </span>
+                        <span className="text-[10px] text-cyan-400">HASH: SHA256-VSH-9281F</span>
                       </div>
 
-                      <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 pt-0.5">
-                        <span className={`${check.status === 'ALERT' ? 'text-rose-300 font-medium' : ''}`}>
-                          {check.detail}
-                        </span>
-                        <span className="text-slate-400 text-[10px] shrink-0 ml-2">
-                          {check.latencyMs}ms
-                        </span>
+                      <div className="grid grid-cols-2 gap-3 text-[11px]">
+                        <div>
+                          <span className="text-slate-400 block text-[10px]">EXIF SOFTWARE</span>
+                          <span className={`font-semibold ${
+                            activePreset.forensics.exifSoftware?.includes('Photoshop') || activePreset.forensics.exifSoftware?.includes('Stable')
+                              ? 'text-rose-400' 
+                              : 'text-slate-200'
+                          }`}>
+                            {activePreset.forensics.exifSoftware || 'Original RAW'}
+                          </span>
+                        </div>
+
+                        <div>
+                          <span className="text-slate-400 block text-[10px]">COMPRESSION RATIO</span>
+                          <span className="text-slate-200">{activePreset.forensics.compressionRatio}</span>
+                        </div>
+
+                        <div>
+                          <span className="text-slate-400 block text-[10px]">MRZ STATUS</span>
+                          <span className={`font-bold ${
+                            activePreset.forensics.mrzStatus.includes('INVALID') ? 'text-rose-400' : 'text-emerald-400'
+                          }`}>
+                            {activePreset.forensics.mrzStatus}
+                          </span>
+                        </div>
+
+                        <div>
+                          <span className="text-slate-400 block text-[10px]">DARK WEB CLUSTER MATCHES</span>
+                          <span className={`font-bold ${
+                            activePreset.forensics.darkWebMatches > 0 ? 'text-rose-400' : 'text-emerald-400'
+                          }`}>
+                            {activePreset.forensics.darkWebMatches} Identity Links
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  ))}
-                </div>
-
-                {/* 3. Deep Forensic Metadata Grid */}
-                <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 font-mono text-xs space-y-2.5">
-                  <div className="flex items-center justify-between pb-1 border-b border-slate-800">
-                    <span className="text-slate-400 flex items-center gap-1.5">
-                      <Layers className="w-3.5 h-3.5 text-cyan-400" />
-                      SUB-PIXEL & TELEMETRY ATTESTATION
-                    </span>
-                    <span className="text-[10px] text-cyan-400">HASH: SHA256-VSH-9281F</span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 text-[11px]">
-                    <div>
-                      <span className="text-slate-400 block text-[10px]">EXIF SOFTWARE</span>
-                      <span className={`font-semibold ${
-                        activePreset.forensics.exifSoftware?.includes('Photoshop') || activePreset.forensics.exifSoftware?.includes('Stable')
-                          ? 'text-rose-400' 
-                          : 'text-slate-200'
-                      }`}>
-                        {activePreset.forensics.exifSoftware || 'Original RAW'}
-                      </span>
-                    </div>
-
-                    <div>
-                      <span className="text-slate-400 block text-[10px]">COMPRESSION RATIO</span>
-                      <span className="text-slate-200">{activePreset.forensics.compressionRatio}</span>
-                    </div>
-
-                    <div>
-                      <span className="text-slate-400 block text-[10px]">MRZ STATUS</span>
-                      <span className={`font-bold ${
-                        activePreset.forensics.mrzStatus.includes('INVALID') ? 'text-rose-400' : 'text-emerald-400'
-                      }`}>
-                        {activePreset.forensics.mrzStatus}
-                      </span>
-                    </div>
-
-                    <div>
-                      <span className="text-slate-400 block text-[10px]">DARK WEB CLUSTER MATCHES</span>
-                      <span className={`font-bold ${
-                        activePreset.forensics.darkWebMatches > 0 ? 'text-rose-400' : 'text-emerald-400'
-                      }`}>
-                        {activePreset.forensics.darkWebMatches} Identity Links
-                      </span>
-                    </div>
-                  </div>
-                </div>
+                  </>
+                )}
 
                 {/* 4. Action Buttons */}
                 <div className="pt-2 flex flex-wrap items-center gap-3">
